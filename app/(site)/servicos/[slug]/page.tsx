@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-export const dynamic = 'force-dynamic';
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 import { FAQAccordion } from "@/components/site/FAQAccordion";
