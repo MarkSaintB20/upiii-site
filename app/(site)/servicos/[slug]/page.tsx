@@ -10,6 +10,14 @@ interface Props {
   params: { slug: string };
 }
 
+export async function generateStaticParams() {
+  const services = await prisma.service.findMany({
+    where: { isActive: true },
+    select: { slug: true }
+  });
+  return services.map((s) => ({ slug: s.slug }));
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const service = await prisma.service.findUnique({
     where: { slug: params.slug },
