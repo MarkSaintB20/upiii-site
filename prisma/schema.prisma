@@ -1,0 +1,347 @@
+// schema.prisma — Agência Upiii
+// Datasource e generator
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─────────────────────────────────────────────
+// ENUMERAÇÕES
+// ─────────────────────────────────────────────
+
+enum FunnelStageEnum {
+  TOP    // Topo de funil
+  MID    // Meio de funil
+  BOTTOM // Fundo de funil
+}
+
+enum LeadStatus {
+  NEW          // Novo lead
+  IN_PROGRESS  // Em atendimento
+  CONVERTED    // Convertido em cliente
+  LOST         // Perdido
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliverableStatus {
+  PENDING
+  IN_REVIEW
+  DONE
+}
+
+enum ContentFormat {
+  VERTICAL
+  HORIZONTAL
+  SQUARE
+  CAROUSEL
+  STATIC
+  STORY
+  PRESENTATION
+}
+
+// ─────────────────────────────────────────────
+// AUTENTICAÇÃO (Admin)
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String   // Hash bcrypt
+  role      String   @default("EDITOR") // ADMIN | EDITOR
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// ESTRUTURA DE SERVIÇOS
+// ─────────────────────────────────────────────
+
+// Categoria de serviço (ex.: Vídeo, SEO, Design Digital)
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique // "Vídeo", "SEO", "Copy"...
+  slug        String    @unique // "video", "seo", "copy"
+  description String?
+  iconName    String?   // Nome do ícone Lucide/Heroicons
+  order       Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  services    Service[]
+}
+
+// Serviço específico (pode ser o próprio bloco ou subserviço)
+model Service {
+  id               String          @id @default(cuid())
+  categoryId       String
+  category         ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  name             String
+  slug             String          @unique // ex.: "gestao-de-trafego"
+  shortDescription String          // Para cards na listagem
+  fullDescription  String          // Markdown ou HTML — página de detalhe
+  benefits         String[]        // Lista de benefícios para o negócio
+  funnelStage      FunnelStageEnum @default(TOP)
+  ctaLabel         String?         // Texto do botão CTA específico
+  ctaUrl           String?         // URL do CTA (ex.: /contato?servico=video)
+  metaTitle        String?
+  metaDescription  String?
+  isActive         Boolean         @default(true)
+  order            Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  deliverableGroups DeliverableGroup[]
+  faqs              FAQ[]
+  publications      Publication[]
+  projectServices   ProjectService[]
+  recordingSessions RecordingSession[]
+}
+
+// Grupo de entregáveis dentro de um serviço
+// Ex.: para "Vídeo" → grupos "Produção", "Publicação"
+model DeliverableGroup {
+  id        String   @id @default(cuid())
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id])
+  name      String   // "Produção", "Publicação", "Estratégia"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items DeliverableItem[]
+}
+
+// Item individual de entregável
+// Ex.: "Textualização", "Gravação", "Edição", "Publicação", "Auditoria SEO"
+model DeliverableItem {
+  id               String           @id @default(cuid())
+  groupId          String
+  group            DeliverableGroup @relation(fields: [groupId], references: [id])
+  name             String           // "Gravação", "Edição", "Roteiro"
+  description      String?
+  estimatedHours   Float?
+  order            Int              @default(0)
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  projectDeliverables ProjectDeliverable[]
+}
+
+// FAQ por serviço (também usado para FAQPage Schema.org)
+model FAQ {
+  id        String   @id @default(cuid())
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id])
+  question  String
+  answer    String
+  order     Int      @default(0)
+  isGlobal  Boolean  @default(false) // FAQ geral do site (não vinculado a serviço)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// CANAIS E PUBLICAÇÕES
+// ─────────────────────────────────────────────
+
+// Canal de publicação
+model Channel {
+  id           String        @id @default(cuid())
+  name         String        @unique // "Instagram", "TikTok", "LinkedIn"...
+  slug         String        @unique
+  defaultFormat ContentFormat @default(VERTICAL)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  publications Publication[]
+}
+
+// Registro de publicação real
+model Publication {
+  id             String        @id @default(cuid())
+  serviceId      String
+  service        Service       @relation(fields: [serviceId], references: [id])
+  channelId      String
+  channel        Channel       @relation(fields: [channelId], references: [id])
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id])
+
+  title          String?
+  publicationUrl String?       // Link da publicação real
+  format         ContentFormat @default(VERTICAL)
+  publishedAt    DateTime?
+  isPromoted     Boolean       @default(false) // Flag: foi anunciado?
+  adBudget       Float?        // Verba de anúncio (quando isPromoted = true)
+  adPlatform     String?       // "Meta Ads", "Google Ads", "TikTok Ads"
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// CLIENTES E PROJETOS
+// ─────────────────────────────────────────────
+
+model Client {
+  id          String    @id @default(cuid())
+  name        String
+  companyName String
+  email       String    @unique
+  phone       String?
+  segment     String?   // Ex.: "Saúde", "Educação", "Varejo"
+  website     String?
+  logoUrl     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  projects    Project[]
+  leads       Lead[]
+}
+
+// Projeto/campanha por cliente
+model Project {
+  id          String        @id @default(cuid())
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id])
+  name        String        // "Campanha Jan/25 — Instagram"
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      ProjectStatus @default(ACTIVE)
+  totalBudget Float?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  projectServices    ProjectService[]
+  projectDeliverables ProjectDeliverable[]
+  publications       Publication[]
+  recordingSessions  RecordingSession[]
+}
+
+// Pivot: Serviços contratados dentro de um projeto
+model ProjectService {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id])
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, serviceId])
+}
+
+// Pivot: Entregável dentro de um projeto (com status de execução)
+model ProjectDeliverable {
+  id              String            @id @default(cuid())
+  projectId       String
+  project         Project           @relation(fields: [projectId], references: [id])
+  deliverableId   String
+  deliverable     DeliverableItem   @relation(fields: [deliverableId], references: [id])
+  status          DeliverableStatus @default(PENDING)
+  assignedTo      String?           // Nome/email do responsável
+  dueDate         DateTime?
+  completedAt     DateTime?
+  deliveryUrl     String?           // Link do Drive ou resultado entregue
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// DIÁRIA DE GRAVAÇÃO
+// ─────────────────────────────────────────────
+
+model RecordingSession {
+  id              String   @id @default(cuid())
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id])
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id])
+  clientName      String?  // Caso não seja cliente cadastrado
+  location        String   // Estúdio, locação externa, etc.
+  sessionDate     DateTime
+  durationHours   Float    @default(8)
+  pricePerDay     Float?
+  audiovisualKit  String?  // Descrição do kit: câmera, iluminação, etc.
+  deliveryFormat  String?  // "MP4 4K", "Reels vertical 1080p"
+  quantity        Int?     // Qtd. de vídeos entregues
+  deliveryUrl     String?  // Link do Drive/WeTransfer
+  notes           String?
+  isPaid          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// LEADS
+// ─────────────────────────────────────────────
+
+model Lead {
+  id               String          @id @default(cuid())
+  clientId         String?
+  client           Client?         @relation(fields: [clientId], references: [id])
+
+  // Dados do formulário
+  name             String
+  email            String
+  company          String?
+  segment          String?
+  approximateRevenue String?       // Faixa de faturamento (ex.: "R$ 500k–1M")
+  mainChallenge    String?         // Campo aberto
+  servicesInterest String[]        // Serviços de interesse (array de slugs)
+  preferredTime    String?         // Melhor horário para call
+
+  // Metadados de funil
+  funnelStage      FunnelStageEnum @default(TOP)
+  status           LeadStatus      @default(NEW)
+  originPage       String?         // Ex.: "/servicos/video"
+  originCta        String?         // Ex.: "hero-cta-primary"
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+
+  notes            String?         // Anotações internas
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// CASES / PORTFÓLIO
+// ─────────────────────────────────────────────
+
+model Case {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  clientName  String   // Pode ser anônimo: "Rede de Clínicas — SP"
+  segment     String?
+  challenge   String   // Problema enfrentado
+  solution    String   // Como a Upiii resolveu
+  results     String   // Resultados alcançados (texto ou JSON com métricas)
+  imageUrl    String?
+  videoUrl    String?
+  serviceSlug String?  // Serviço principal relacionado
+  channel     String?  // Canal principal da campanha
+  isFeatured  Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
