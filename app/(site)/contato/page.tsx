@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ContactForm } from "@/components/site/ContactForm";
 
 export const metadata = {
@@ -13,7 +14,9 @@ export default function ContactPage() {
         <p className="text-gray-600 mb-10">
           Preencha os dados abaixo. Um de nossos especialistas analisará seu perfil e entrará em contato para agendar uma conversa de 30 minutos, sem compromisso.
         </p>
-        <ContactForm />
+        <Suspense fallback={<div>Carregando formulário...</div>}>
+          <ContactForm />
+        </Suspense>
       </div>
     </main>
   );

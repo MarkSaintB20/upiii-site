@@ -22,10 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export async function generateStaticParams() {
-  const services = await prisma.service.findMany({ select: { slug: true } });
-  return services.map((s) => ({ slug: s.slug }));
-}
+
 
 export default async function ServicePage({ params }: Props) {
   const service = await prisma.service.findUnique({
